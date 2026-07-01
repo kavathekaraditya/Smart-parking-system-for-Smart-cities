@@ -1,0 +1,136 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          String         @default("DRIVER") // SUPER_ADMIN, OPERATOR, DRIVER, CITY_AUTHORITY, SUPPORT
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  vehicles      Vehicle[]
+  reservations  Reservation[]
+  subscriptions Subscription[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+}
+
+model Vehicle {
+  id           String        @id @default(uuid())
+  plateNumber  String        @unique
+  model        String
+  color        String
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+  createdAt    DateTime      @default(now())
+}
+
+model ParkingLot {
+  id            String        @id @default(uuid())
+  name          String
+  address       String
+  latitude      Float
+  longitude     Float
+  basePrice     Float
+  currentPrice  Float         @default(0.0)
+  capacity      Int
+  occupiedCount Int           @default(0)
+  tenantId      String        @default("default-tenant")
+  status        String        @default("ACTIVE") // ACTIVE, MAINTENANCE, INACTIVE
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  slots         ParkingSlot[]
+  reservations  Reservation[]
+}
+
+model ParkingSlot {
+  id           String        @id @default(uuid())
+  lotId        String
+  lot          ParkingLot    @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  name         String
+  type         String        @default("STANDARD") // STANDARD, EV, HANDICAP
+  isOccupied   Boolean       @default(false)
+  status       String        @default("AVAILABLE") // AVAILABLE, RESERVED, OCCUPIED, BLOCKED
+  reservations Reservation[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([lotId, name])
+}
+
+model Reservation {
+  id            String            @id @default(uuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotId        String
+  slot          ParkingSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  lotId         String
+  lot           ParkingLot        @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  vehicleId     String
+  vehicle       Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  
+  startTime     DateTime
+  endTime       DateTime
+  status        String            @default("PENDING") // PENDING, ACTIVE, COMPLETED, CANCELLED
+  qrCodeToken   String            @unique
+  paymentStatus String            @default("UNPAID") // UNPAID, PAID, REFUNDED
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  
+  payments      Payment[]
+}
+
+model Payment {
+  id                 String        @id @default(uuid())
+  reservationId      String
+  reservation        Reservation   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  amount             Float
+  status             String        @default("PENDING") // PENDING, SUCCESSFUL, FAILED, REFUNDED
+  stripePaymentId    String?
+  razorpayPaymentId  String?
+  invoiceUrl         String?
+  createdAt          DateTime      @default(now())
+}
+
+model Subscription {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      String           @default("FREE") // FREE, STARTER, PROFESSIONAL, ENTERPRISE
+  status    String           @default("ACTIVE") // ACTIVE, CANCELLED, EXPIRED
+  price     Float
+  startDate DateTime         @default(now())
+  endDate   DateTime
+  createdAt DateTime         @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("PUSH") // PUSH, EMAIL, SMS
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  ipAddress String?
+  details   String?
+  createdAt DateTime @default(now())
+}
